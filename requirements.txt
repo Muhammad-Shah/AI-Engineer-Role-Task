@@ -1,0 +1,10 @@
+fastapi[standard]
+sqlalchemy
+psycopg2-binary
+langchain
+langgraph
+langchain-openai
+pymysql
+pymongo
+langchain-core
+langchain-community
