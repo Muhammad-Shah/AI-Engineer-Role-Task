@@ -8,3 +8,4 @@ pymysql
 pymongo
 langchain-core
 langchain-community
+uvicorn

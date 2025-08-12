@@ -1,3 +1,77 @@
 /.qodo
 /var
 /venv
+__pycache__/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.env.backup
+.env.local
+.Python
+
+.env
+build/
+req.txt
+develop-eggs/
+dist/
+.qodo
+downloads/
+eggs/
+request.md
+.env
+requirements.txt
+.eggs/
+lib/
+lib64/
+parts/
+all.py
+deeplearning.md
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+python_code.py
+# Virtual Environment
+venv/
+ENV/
+my_project_files.txt
+python_code.py
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+*.log
+logs/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+zunused/
+venv/
+
+# MongoDB
+*.mongodb
+
+# Redis
+dump.rdb
+
+# Docker
+.docker/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+rough
+# Node (if using any frontend components)
+node_modules/
+npm-debug.log
+

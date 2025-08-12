@@ -1,27 +1,87 @@
-// Initialize MongoDB with application user and sample data
+// MongoDB initialization script
+// Create database and user
 db = db.getSiblingDB('sampledb');
 
-// Create app user with readWrite on sampledb
+// Create user with read/write access to sampledb
 db.createUser({
-  user: 'appuser',
-  pwd: 'apppassword',
-  roles: [{ role: 'readWrite', db: 'sampledb' }]
+  user: "appuser",
+  pwd: "apppassword",
+  roles: [
+    {
+      role: "readWrite",
+      db: "sampledb"
+    }
+  ]
 });
 
-// Sample collections and documents
+// Sample collections and data
 db.users.insertMany([
-  { name: 'Alice', email: 'alice@example.com', created_at: new Date(Date.now() - 40*24*60*60*1000) },
-  { name: 'Bob', email: 'bob@example.com', created_at: new Date(Date.now() - 20*24*60*60*1000) },
-  { name: 'Carol', email: 'carol@example.com', created_at: new Date(Date.now() - 10*24*60*60*1000) },
-  { name: 'Dave', email: 'dave@example.com', created_at: new Date(Date.now() - 1*24*60*60*1000) }
+  {
+    "name": "John Doe",
+    "email": "john@example.com",
+    "age": 30,
+    "department": "Engineering",
+    "hire_date": new Date("2023-01-15"),
+    "salary": 85000,
+    "active": true
+  },
+  {
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "age": 28,
+    "department": "Marketing",
+    "hire_date": new Date("2023-03-20"),
+    "salary": 72000,
+    "active": true
+  },
+  {
+    "name": "Bob Johnson",
+    "email": "bob@example.com",
+    "age": 35,
+    "department": "Sales",
+    "hire_date": new Date("2022-08-10"),
+    "salary": 68000,
+    "active": false
+  },
+  {
+    "name": "Alice Brown",
+    "email": "alice@example.com",
+    "age": 32,
+    "department": "Engineering",
+    "hire_date": new Date("2023-06-01"),
+    "salary": 92000,
+    "active": true
+  }
 ]);
 
 db.orders.insertMany([
-  { user_email: 'alice@example.com', amount: 120.50, order_date: new Date(Date.now() - 35*24*60*60*1000) },
-  { user_email: 'bob@example.com', amount: 75.00, order_date: new Date(Date.now() - 15*24*60*60*1000) },
-  { user_email: 'bob@example.com', amount: 33.40, order_date: new Date(Date.now() - 8*24*60*60*1000) },
-  { user_email: 'carol@example.com', amount: 220.10, order_date: new Date(Date.now() - 2*24*60*60*1000) },
-  { user_email: 'dave@example.com', amount: 15.99, order_date: new Date(Date.now() - 12*60*60*1000) }
+  {
+    "order_id": "ORD-001",
+    "customer_name": "John Doe",
+    "product": "Laptop",
+    "quantity": 2,
+    "price": 1500.00,
+    "order_date": new Date("2024-01-15"),
+    "status": "delivered"
+  },
+  {
+    "order_id": "ORD-002",
+    "customer_name": "Jane Smith",
+    "product": "Mouse",
+    "quantity": 5,
+    "price": 25.00,
+    "order_date": new Date("2024-01-20"),
+    "status": "pending"
+  },
+  {
+    "order_id": "ORD-003",
+    "customer_name": "Bob Johnson",
+    "product": "Keyboard",
+    "quantity": 1,
+    "price": 75.00,
+    "order_date": new Date("2024-01-25"),
+    "status": "shipped"
+  }
 ]);
 
-
+print("Sample data inserted successfully!");
