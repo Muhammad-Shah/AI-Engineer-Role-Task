@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.db_models import CachedQuery
+from app.services.llm_agent import DateTimeEncoder
 
 
 def _tokenize(text: str) -> set:
@@ -38,11 +39,12 @@ def find_cached_result(db: Session, normalized_message: str, threshold: float = 
     return best
 
 
-def store_cache(db: Session, normalized_message: str, sql_text: str, result: dict, ttl_seconds: int = 86400) -> CachedQuery:
+def store_cache(db: Session, normalized_message: str, message: str, sql_text: str, result: dict, ttl_seconds: int = 86400) -> CachedQuery:
     entry = CachedQuery(
         normalized_message=normalized_message,
         sql_text=sql_text,
-        result_json=json.dumps(result),
+        message=message,
+        result_json=json.dumps(result, cls=DateTimeEncoder),
         ttl_seconds=ttl_seconds,
         hit_count=0,
     )

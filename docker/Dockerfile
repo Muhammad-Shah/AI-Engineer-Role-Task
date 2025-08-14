@@ -12,18 +12,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY ./app /app/app
 COPY ./data /app/data
 COPY ./docker /app/docker
+COPY ./static /app/static
 COPY ./var /app/var
+COPY ./.env /app/.env
 COPY ./requirements.txt /app/requirements.txt
 
-# # Install Python deps directly (no requirements.txt)
-# RUN pip install --no-cache-dir fastapi uvicorn[standard] sqlalchemy psycopg2-binary pymysql pymongo python-multipart \
-#     langchain langgraph langchain-openai
 
-
-# Instal dependencies
+# Install dependencies
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -46,6 +46,7 @@ class CachedQuery(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     normalized_message = Column(Text, index=True)
     sql_text = Column(Text)
+    message = Column(Text)
     result_json = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
     hit_count = Column(Integer, default=0)

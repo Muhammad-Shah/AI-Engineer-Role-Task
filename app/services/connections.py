@@ -30,12 +30,14 @@ class ConnectionRegistry:
     def __init__(self) -> None:
         self._store: Dict[str, ConnectionEntry] = {}
 
-    def connect(self, host: str, port: int, database: str, username: str, password: str, db_type: str = "postgresql", options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def connect(self, host: str, port: int, database: str, username: Optional[str], password: Optional[str], db_type: str = "postgresql", options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         connection_id = str(uuid.uuid4())
         created_at = time.time()
         options = options or {}
 
         if db_type in ("postgresql", "mysql"):
+            if not username or not password:
+                raise ValueError(f"Username and password are required for {db_type}")
             driver = "postgresql+psycopg2" if db_type == "postgresql" else "mysql+pymysql"
             url = f"{driver}://{username}:{password}@{host}:{port}/{database}"
             pool_size = int(options.get("pool_size", 5))
@@ -83,7 +85,16 @@ class ConnectionRegistry:
         elif db_type == "mongodb":
             if pymongo is None:
                 raise RuntimeError("pymongo is not installed")
-            uri = f"mongodb://{username}:{password}@{host}:{port}/{database}?authSource={database}"
+            
+            # Handle cases with and without authentication
+            if username and password:
+                # For root user, use admin as authSource; for others use the specified database
+                auth_source = "admin" if username == "root" else database
+                uri = f"mongodb://{username}:{password}@{host}:{port}/{database}?authSource={auth_source}"
+            else:
+                # No authentication (local development)
+                uri = f"mongodb://{host}:{port}/{database}"
+            
             server_selection_timeout_ms = int(options.get("serverSelectionTimeoutMS", 5000))
             client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=server_selection_timeout_ms)
             # Validate connection

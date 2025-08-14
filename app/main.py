@@ -4,6 +4,10 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from dotenv import load_dotenv
+load_dotenv()
 
 from app.config import settings
 from app.models.db_models import init_local_db
@@ -58,7 +62,7 @@ app = FastAPI(
     },
     lifespan=lifespan
 )
-
+print("--------------------------------------------------------------------")
 # CORS
 origins = settings.cors_allow_origins or ["*"]
 app.add_middleware(
@@ -68,6 +72,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Static Files
+static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+if os.path.exists(static_path):
+    app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 # Routers
 app.include_router(database_router.router)
@@ -80,3 +89,13 @@ app.include_router(chat_router.router)
 @app.get("/")
 def root():
     return {"status": "ok", "app": app.title, "version": "1.0.0"}
+
+@app.get("/ui")
+def ui():
+    """Serve the web UI"""
+    static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    index_path = os.path.join(static_path, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        return {"message": "UI not found. Make sure static files are available."}

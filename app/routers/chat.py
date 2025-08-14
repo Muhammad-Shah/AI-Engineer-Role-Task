@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.models.db_models import ChatMessage, ChatSession, get_db_session
+from app.models.db_models import ChatMessage, ChatSession, get_db_session, SessionLocal
 from app.models.schemas import ChatQueryRequest, ChatSessionCreateResponse, ChatSessionModel, ChatMessageModel, DeleteSessionResponse
 from app.services.connections import registry
 from app.services.cache import find_cached_result, store_cache, increment_cache_hit
 from app.services.llm_agent import run_sql_react_agent, run_mongo_react_agent
+from app.services.direct_llm import run_direct_sql_llm, run_direct_mongo_llm
 from app.config import settings
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -88,6 +89,8 @@ def query_chat(body: ChatQueryRequest, db: Session = Depends(get_db_session)):
 
     # Ensure session
     sess = _ensure_session(db, body.session_id)
+    # Capture primitive ID now to avoid relying on ORM instance during streaming
+    session_id = sess.id
 
     # Persist user message
     user_msg = ChatMessage(session_id=sess.id, sender_type="user", content=body.message)
@@ -95,73 +98,211 @@ def query_chat(body: ChatQueryRequest, db: Session = Depends(get_db_session)):
     db.commit()
 
     def event_stream() -> Generator[bytes, None, None]:
-        # step 1: acknowledge
-        yield json.dumps({"event": "start", "session_id": sess.id}).encode() + b"\n"
-
-        normalized = _normalize_message(body.message)
-        # Bonus: cache lookup (threshold from settings, percentage -> fraction)
-        cache_threshold = max(0.0, min(1.0, settings.cache_similarity_threshold / 100.0))
-        cache_hit = find_cached_result(db, normalized, threshold=cache_threshold)
-        if cache_hit is not None:
-            entry, score = cache_hit
-            increment_cache_hit(db, entry)
-            yield json.dumps({"event": "cache_hit", "similarity": score, "message": entry.normalized_message}).encode() + b"\n"
-            result = json.loads(entry.result_json)
-            # Persist assistant message
-            assistant_msg = ChatMessage(session_id=sess.id, sender_type="assistant", content=json.dumps(result))
-            db.add(assistant_msg)
-            db.commit()
-            yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
-            yield json.dumps({"event": "end"}).encode() + b"\n"
-            return
-
-        # No cache: use LLM ReAct agent
+        # Use a dedicated DB session within the streaming lifecycle
+        stream_db = SessionLocal()
         try:
+            # step 1: acknowledge (use captured primitive session_id)
+            yield json.dumps({"event": "start", "session_id": session_id}).encode() + b"\n"
+
+            normalized = _normalize_message(body.message)
+            # Bonus: cache lookup (threshold from settings, percentage -> fraction)
+            cache_threshold = max(0.0, min(1.0, settings.cache_similarity_threshold / 100.0))
+            cache_hit = find_cached_result(stream_db, normalized, threshold=cache_threshold)
+            if cache_hit is not None:
+                entry, score = cache_hit
+                increment_cache_hit(stream_db, entry)
+                yield json.dumps({"event": "cache_hit", "similarity": score, "message": entry.normalized_message}).encode() + b"\n"
+                result = json.loads(entry.result_json)
+                # Persist assistant message
+                assistant_msg = ChatMessage(session_id=session_id, sender_type="assistant", content=json.dumps(result))
+                stream_db.add(assistant_msg)
+                stream_db.commit()
+                yield json.dumps({"event": "generated_message", "message": entry.message}).encode() + b"\n"
+                yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
+                yield json.dumps({"event": "end"}).encode() + b"\n"
+                return
+
+            # No cache: use LLM ReAct agent
+            try:
+                entry = registry._store.get(body.connection_id)
+                if entry is None:
+                    raise RuntimeError("connection not found")
+
+                if entry.db_type in ("postgresql", "mysql") and entry.engine is not None:
+                    yield json.dumps({"event": "agent_started", "mode": "sql"}).encode() + b"\n"
+                    agent_out = run_sql_react_agent(entry.engine, body.message, temperature=0.6)
+                    if agent_out.generated_sql:
+                        yield json.dumps({"event": "generated_sql", "sql": agent_out.generated_sql, "params": {}}).encode() + b"\n"
+                    yield json.dumps({"event": "generated_message", "message": agent_out.raw_final}).encode() + b"\n"
+                    result = {"columns": agent_out.result_columns, "rows": agent_out.result_rows}
+                    # persist and cache
+                    store_cache(stream_db, normalized, agent_out.raw_final, agent_out.generated_sql or "", result, ttl_seconds=settings.cache_ttl_seconds)
+                    assistant_msg = ChatMessage(session_id=session_id, sender_type="assistant", content=json.dumps(result))
+                    stream_db.add(assistant_msg)
+                    stream_db.commit()
+                    yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
+                    yield json.dumps({"event": "end"}).encode() + b"\n"
+                    return
+
+                elif entry.db_type == "mongodb" and entry.mongo_client is not None:
+                    yield json.dumps({"event": "agent_started", "mode": "mongo"}).encode() + b"\n"
+                    agent_out = run_mongo_react_agent(entry.mongo_client, entry.database or "admin", body.message, temperature=0.6)
+                    if agent_out.generated_filter is not None:
+                        yield json.dumps({"event": "generated_filter", "filter": agent_out.generated_filter}).encode() + b"\n"
+                    yield json.dumps({"event": "generated_message", "message": agent_out.raw_final}).encode() + b"\n"
+                    result = {"columns": agent_out.result_columns, "rows": agent_out.result_rows}
+                    store_cache(
+                        stream_db,
+                        normalized,
+                        agent_out.raw_final,
+                        json.dumps({"collection": "*", "filter": agent_out.generated_filter or {}}),
+                        result,
+                        ttl_seconds=settings.cache_ttl_seconds,
+                    )
+                    assistant_msg = ChatMessage(session_id=session_id, sender_type="assistant", content=json.dumps(result))
+                    stream_db.add(assistant_msg)
+                    stream_db.commit()
+                    yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
+                    yield json.dumps({"event": "end"}).encode() + b"\n"
+                    return
+                else:
+                    yield json.dumps({"event": "error", "message": "Unsupported connection type"}).encode() + b"\n"
+                    yield json.dumps({"event": "end"}).encode() + b"\n"
+                    return
+            except Exception as exc:
+                yield json.dumps({"event": "agent_error", "message": str(exc)}).encode() + b"\n"
+                yield json.dumps({"event": "end"}).encode() + b"\n"
+        finally:
+            stream_db.close()
+
+    # Stream as NDJSON
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
+
+@router.post("/query-direct")
+def query_chat_direct(body: ChatQueryRequest, db: Session = Depends(get_db_session)):
+    """
+    Direct LLM approach: Generate SQL/MongoDB queries directly from user questions.
+    This endpoint provides conversational AI that can either generate and execute database queries
+    or provide general conversation responses based on the user's input.
+    
+    Features:
+    - Conversational AI that understands context
+    - Direct SQL/MongoDB generation without ReAct agent overhead
+    - Faster response times
+    - Mixed conversation and database query handling
+    """
+    # Validate connection
+    conn_info = registry.validate(body.connection_id)
+    if not conn_info.get("is_valid"):
+        raise HTTPException(status_code=400, detail=f"Invalid connection: {conn_info.get('error', 'unknown')}")
+
+    # Ensure session
+    sess = _ensure_session(db, body.session_id)
+    # Capture primitive ID now to avoid relying on ORM instance during streaming
+    session_id = sess.id
+
+    # Persist user message
+    user_msg = ChatMessage(session_id=sess.id, sender_type="user", content=body.message)
+    db.add(user_msg)
+    db.commit()
+
+    async def direct_event_stream() -> Generator[bytes, None, None]:
+        # Use a dedicated DB session within the streaming lifecycle
+        stream_db = SessionLocal()
+        try:
+            # step 1: acknowledge (use captured primitive session_id)
+            yield json.dumps({"event": "start", "session_id": session_id, "mode": "direct_llm"}).encode() + b"\n"
             entry = registry._store.get(body.connection_id)
             if entry is None:
                 raise RuntimeError("connection not found")
 
+            # Use direct LLM approach based on database type
             if entry.db_type in ("postgresql", "mysql") and entry.engine is not None:
-                yield json.dumps({"event": "agent_started", "mode": "sql"}).encode() + b"\n"
-                agent_out = run_sql_react_agent(entry.engine, body.message, temperature=0.6)
-                if agent_out.generated_sql:
-                    yield json.dumps({"event": "generated_sql", "sql": agent_out.generated_sql, "params": {}}).encode() + b"\n"
-                result = {"columns": agent_out.result_columns, "rows": agent_out.result_rows}
-                # persist and cache
-                store_cache(db, normalized, agent_out.generated_sql or "", result, ttl_seconds=settings.cache_ttl_seconds)
-                assistant_msg = ChatMessage(session_id=sess.id, sender_type="assistant", content=json.dumps(result))
-                db.add(assistant_msg)
-                db.commit()
-                yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
-                yield json.dumps({"event": "end"}).encode() + b"\n"
-                return
+                # Use direct SQL LLM
+                async for event in run_direct_sql_llm(entry.engine, body.message, temperature=0.3):
+                    event_json = json.dumps(event).encode() + b"\n"
+                    yield event_json
+                    
+                    # Store result if it's a database query result
+                    if event.get("event") == "result":
+                        result_data = event.get("data", {})
+                        assistant_content = {
+                            "type": "database_result",
+                            "columns": result_data.get("columns", []),
+                            "rows": result_data.get("rows", []),
+                            "sql": result_data.get("sql"),
+                            "explanation": result_data.get("explanation")
+                        }
+                        assistant_msg = ChatMessage(
+                            session_id=session_id, 
+                            sender_type="assistant", 
+                            content=json.dumps(assistant_content)
+                        )
+                        stream_db.add(assistant_msg)
+                        stream_db.commit()
+                    
+                    # Store conversational response
+                    elif event.get("event") == "conversation":
+                        assistant_content = {
+                            "type": "conversation",
+                            "message": event.get("message", "")
+                        }
+                        assistant_msg = ChatMessage(
+                            session_id=session_id, 
+                            sender_type="assistant", 
+                            content=json.dumps(assistant_content)
+                        )
+                        stream_db.add(assistant_msg)
+                        stream_db.commit()
 
             elif entry.db_type == "mongodb" and entry.mongo_client is not None:
-                yield json.dumps({"event": "agent_started", "mode": "mongo"}).encode() + b"\n"
-                agent_out = run_mongo_react_agent(entry.mongo_client, entry.database or "admin", body.message, temperature=0.6)
-                if agent_out.generated_filter is not None:
-                    yield json.dumps({"event": "generated_filter", "filter": agent_out.generated_filter}).encode() + b"\n"
-                result = {"columns": agent_out.result_columns, "rows": agent_out.result_rows}
-                store_cache(
-                    db,
-                    normalized,
-                    json.dumps({"collection": "*", "filter": agent_out.generated_filter or {}}),
-                    result,
-                    ttl_seconds=settings.cache_ttl_seconds,
-                )
-                assistant_msg = ChatMessage(session_id=sess.id, sender_type="assistant", content=json.dumps(result))
-                db.add(assistant_msg)
-                db.commit()
-                yield json.dumps({"event": "result", "data": result}).encode() + b"\n"
-                yield json.dumps({"event": "end"}).encode() + b"\n"
-                return
+                # Use direct MongoDB LLM
+                async for event in run_direct_mongo_llm(entry.mongo_client, entry.database or "admin", body.message, temperature=0.3):
+                    event_json = json.dumps(event).encode() + b"\n"
+                    yield event_json
+                    
+                    # Store result if it's a database query result
+                    if event.get("event") == "result":
+                        result_data = event.get("data", {})
+                        assistant_content = {
+                            "type": "database_result",
+                            "columns": result_data.get("columns", []),
+                            "rows": result_data.get("rows", []),
+                            "collection": result_data.get("collection"),
+                            "filter": result_data.get("filter"),
+                            "explanation": result_data.get("explanation")
+                        }
+                        assistant_msg = ChatMessage(
+                            session_id=session_id, 
+                            sender_type="assistant", 
+                            content=json.dumps(assistant_content)
+                        )
+                        stream_db.add(assistant_msg)
+                        stream_db.commit()
+                    
+                    # Store conversational response
+                    elif event.get("event") == "conversation":
+                        assistant_content = {
+                            "type": "conversation", 
+                            "message": event.get("message", "")
+                        }
+                        assistant_msg = ChatMessage(
+                            session_id=session_id, 
+                            sender_type="assistant", 
+                            content=json.dumps(assistant_content)
+                        )
+                        stream_db.add(assistant_msg)
+                        stream_db.commit()
             else:
                 yield json.dumps({"event": "error", "message": "Unsupported connection type"}).encode() + b"\n"
-                yield json.dumps({"event": "end"}).encode() + b"\n"
-                return
+                
         except Exception as exc:
-            yield json.dumps({"event": "agent_error", "message": str(exc)}).encode() + b"\n"
-            yield json.dumps({"event": "end"}).encode() + b"\n"
+            yield json.dumps({"event": "error", "message": str(exc)}).encode() + b"\n"
+        finally:
+            stream_db.close()
+        
+        yield json.dumps({"event": "end"}).encode() + b"\n"
 
     # Stream as NDJSON
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return StreamingResponse(direct_event_stream(), media_type="application/x-ndjson")

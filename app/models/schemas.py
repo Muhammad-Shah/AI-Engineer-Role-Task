@@ -9,8 +9,8 @@ class DatabaseConnectRequest(BaseModel):
     host: str
     port: int
     database: str
-    username: str
-    password: str
+    username: Optional[str] = Field(default=None)
+    password: Optional[str] = Field(default=None)
     db_type: Literal["postgresql", "mysql", "mongodb"] = Field(default="postgresql")
     options: Optional[Dict[str, Any]] = None
 

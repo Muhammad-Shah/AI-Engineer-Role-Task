@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Chatbot - AI Engineer Demo</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-database"></i> Database Chatbot</h1>
+                <p>Natural Language Database Interactions - AI Engineer Demo</p>
+            </div>
+            <div class="status-indicator">
+                <span id="connection-status" class="status disconnected">
+                    <i class="fas fa-circle"></i> Disconnected
+                </span>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="section">
+                    <h3><i class="fas fa-plug"></i> Database Connection</h3>
+                    <form id="connection-form">
+                        <div class="form-group">
+                            <label for="db-type">Database Type:</label>
+                            <select id="db-type" required>
+                                <option value="postgresql">PostgreSQL</option>
+                                <option value="mysql">MySQL</option>
+                                <option value="mongodb">MongoDB</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="host">Host:</label>
+                            <input type="text" id="host" value="localhost" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="port">Port:</label>
+                            <input type="number" id="port" value="5432" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="database">Database:</label>
+                            <input type="text" id="database" value="sampledb" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="username">Username:</label>
+                            <input type="text" id="username" value="postgres" placeholder="Username">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="password">Password:</label>
+                            <input type="password" id="password" value="postgres" placeholder="Password">
+                        </div>
+                        
+                        <button type="submit" id="connect-btn" class="btn btn-primary">
+                            <i class="fas fa-link"></i> Connect
+                        </button>
+                    </form>
+                    
+                    <div id="connection-info" class="connection-info hidden">
+                        <h4>Connected Database:</h4>
+                        <p><strong>Type:</strong> <span id="connected-type"></span></p>
+                        <p><strong>Database:</strong> <span id="connected-db"></span></p>
+                        <p><strong>Server:</strong> <span id="connected-server"></span></p>
+                        <button id="disconnect-btn" class="btn btn-danger btn-small">
+                            <i class="fas fa-unlink"></i> Disconnect
+                        </button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-comments"></i> Chat Sessions</h3>
+                    <button id="new-session-btn" class="btn btn-success">
+                        <i class="fas fa-plus"></i> New Session
+                    </button>
+                    <div id="sessions-list" class="sessions-list">
+                        <!-- Sessions will be populated here -->
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-cog"></i> Query Mode</h3>
+                    <div class="query-mode-selector">
+                        <label class="radio-option">
+                            <input type="radio" name="query-mode" value="react" checked>
+                            <span class="radio-label">
+                                <i class="fas fa-robot"></i>
+                                <div>
+                                    <strong>ReAct Agent</strong>
+                                    <small>Advanced reasoning with tools</small>
+                                </div>
+                            </span>
+                        </label>
+                        <label class="radio-option">
+                            <input type="radio" name="query-mode" value="direct">
+                            <span class="radio-label">
+                                <i class="fas fa-bolt"></i>
+                                <div>
+                                    <strong>Direct LLM</strong>
+                                    <small>Fast SQL generation + conversation</small>
+                                </div>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3><i class="fas fa-lightbulb"></i> Example Queries</h3>
+                    <div class="example-queries">
+                        <button class="example-btn" data-query="Show me all users">
+                            Show me all users
+                        </button>
+                        <button class="example-btn" data-query="How many users are there?">
+                            How many users are there?
+                        </button>
+                        <button class="example-btn" data-query="List users in Engineering department">
+                            List users in Engineering department
+                        </button>
+                        <button class="example-btn" data-query="Show orders from last month">
+                            Show orders from last month
+                        </button>
+                        <button class="example-btn" data-query="Count active users">
+                            Count active users
+                        </button>
+                        <button class="example-btn" data-query="What products do we have?">
+                            What products do we have?
+                        </button>
+                        <hr style="margin: 1rem 0; border: none; border-top: 1px solid var(--border);">
+                        <small style="color: var(--text-secondary); font-weight: 600;">💬 Conversational (Direct LLM Mode):</small>
+                        <button class="example-btn" data-query="Hello, how are you?">
+                            Hello, how are you?
+                        </button>
+                        <button class="example-btn" data-query="What can you help me with?">
+                            What can you help me with?
+                        </button>
+                        <button class="example-btn" data-query="Explain what this database contains">
+                            Explain what this database contains
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Chat Area -->
+            <main class="chat-container">
+                <div class="chat-header">
+                    <h2 id="current-session">No Session Selected</h2>
+                    <div class="chat-actions">
+                        <button id="clear-chat-btn" class="btn btn-outline">
+                            <i class="fas fa-trash"></i> Clear Chat
+                        </button>
+                        <button id="export-chat-btn" class="btn btn-outline">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messages-container">
+                    <div class="welcome-message">
+                        <div class="welcome-content">
+                            <i class="fas fa-robot"></i>
+                            <h3>Welcome to Database Chatbot!</h3>
+                            <p>Connect to your database and start asking questions in natural language.</p>
+                            <div class="steps">
+                                <div class="step">
+                                    <span class="step-number">1</span>
+                                    <span>Connect to a database</span>
+                                </div>
+                                <div class="step">
+                                    <span class="step-number">2</span>
+                                    <span>Create or select a chat session</span>
+                                </div>
+                                <div class="step">
+                                    <span class="step-number">3</span>
+                                    <span>Ask questions in plain English</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <form id="chat-form">
+                        <div class="input-wrapper">
+                            <input 
+                                type="text" 
+                                id="message-input" 
+                                placeholder="Ask a question about your data..."
+                                disabled
+                            >
+                            <button type="submit" id="send-btn" class="btn btn-primary" disabled>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </form>
+                    <div class="input-status" id="input-status"></div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="loading-spinner">
+                <i class="fas fa-cog fa-spin"></i>
+                <p>Processing your request...</p>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
