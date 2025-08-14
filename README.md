@@ -23,9 +23,14 @@ app/
    services/
      connections.py
      llm_agent.py
+     direct_llm.py
      cache.py
    (LLM-based only; no rule-based translator)
     cache.py
+   static/
+    app.js
+    index.html
+    style.css
   models/
     db_models.py
     schemas.py
