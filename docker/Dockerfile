@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY ./app /app/app
 COPY ./data /app/data
 COPY ./docker /app/docker
-COPY ./static /app/static
 COPY ./requirements.txt /app/requirements.txt
 COPY ./.env /app/.env
 

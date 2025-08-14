@@ -1,37 +1,74 @@
-## Technical Approach and Design Decisions
+# Technical Approach and Design Decisions
 
-### Overview
-The application enables users to connect to relational (PostgreSQL, MySQL) and document (MongoDB) databases and query them using natural language. It exposes the required APIs via FastAPI and streams responses as newline-delimited JSON events for real-time feedback.
+## Architecture Overview
 
-### Key Components
-- `app/services/connections.py`: Central connection registry handling creation, validation, and disconnection for PostgreSQL/MySQL (SQLAlchemy engines with pooling, pre-ping, timeouts) and MongoDB (pymongo with server selection timeout).
-- `app/services/llm_agent.py`: LangChain + LangGraph ReAct agents for SQL and Mongo flows. Agents inspect schema/collections and execute queries via tools, returning columns/rows.
-- `app/routers/database.py` and `app/routers/chat.py`: API routers implementing the exact endpoints, request/response schemas, streaming responses, and persistence of sessions/messages.
-- `app/models/db_models.py`: Local SQLite for chat sessions, messages, and a cache of previously successful queries.
+The system implements a FastAPI-based database chatbot with dual natural language processing approaches, supporting PostgreSQL, MySQL, and MongoDB databases through secure connection management and real-time streaming responses.
 
-### Security and Reliability
-- Connection pooling with pre-ping and timeouts to avoid stale connections.
-- Validation via `SELECT 1` or `ping` before registering connections.
-- Parameterized SQL to avoid concatenation of user inputs.
-- Errors surfaced with structured responses and non-200 statuses when appropriate.
+## Core Technical Approach
 
-### Real-time Streaming
-- Responses stream as newline-delimited JSON events: `start`, optional `cache_hit`, `generated_sql`/`generated_filter`, `result`, and `end`.
-- This keeps clients informed of each stage in the pipeline.
+### 1. Dual LLM Strategy
+**Decision**: Implemented two distinct approaches for natural language processing:
+- **ReAct Agent Mode**: Uses LangChain/LangGraph with tool-based reasoning for complex queries
+- **Direct LLM Mode**: Single-step SQL/MongoDB generation for faster responses and conversational AI
 
-### Caching (Bonus)
-- Message normalization and Jaccard similarity to identify similar queries.
-- Entries include TTL and hit count; expired entries are ignored.
-- Increases responsiveness for repeated or similar questions.
+**Rationale**: ReAct agents excel at complex schema exploration but can be slow and hit recursion limits. Direct LLM provides speed and conversational capabilities while maintaining query accuracy.
 
-### Extensibility
-- Agents can be augmented with additional tools (e.g., DDL introspection, sampler, explain plan).
-- Registry supports additional database types with minimal changes.
+### 2. Connection Management Architecture
+**Decision**: Centralized connection registry (`ConnectionRegistry`) with in-memory storage and health monitoring.
+- SQLAlchemy engines with connection pooling, pre-ping, and timeout management
+- MongoDB clients with server selection timeouts
+- UUID-based connection tracking with validation endpoints
 
-### Trade-offs
-- Pure LLM agent requires `OPENAI_API_KEY` and stable connectivity; in return provides broader NL coverage without hand-written rules.
-- SQL dialect differences are handled by the agent with schema context; deeper dialect support can be added via tool hints.
+**Rationale**: Ensures connection reliability, prevents stale connections, and provides proper resource cleanup while maintaining stateless API design.
 
-### Testing and Demo
-- Docker Compose includes a PostgreSQL instance initialized with sample schema/data for immediate testing.
-- API docs available at `/docs` and `/openapi.json`.
+### 3. Streaming Response Design
+**Decision**: Server-sent events via newline-delimited JSON (NDJSON) streaming.
+- Progressive event emission: `start` → `llm_processing` → `generated_sql` → `executing_sql` → `result` → `end`
+- Real-time feedback during long-running operations
+
+**Rationale**: Provides immediate user feedback, reduces perceived latency, and allows clients to display progress indicators during query processing.
+
+### 4. Session and Cache Management
+**Decision**: SQLite-based local persistence for chat sessions and intelligent query caching.
+- Jaccard similarity matching for query cache hits
+- TTL-based cache expiration with hit count tracking
+- Session-based conversation history
+
+**Rationale**: Improves performance through result reuse, maintains conversation context, and avoids external database dependencies for application state.
+
+## Key Design Decisions
+
+### Database Abstraction
+**Choice**: Unified interface for multiple database types through connection registry pattern.
+**Trade-off**: Some database-specific features are abstracted away for consistency, but enables seamless multi-database support.
+
+### LLM Integration
+**Choice**: OpenAI GPT models with structured prompting and schema injection.
+**Trade-off**: Requires API key and external dependency, but provides superior natural language understanding compared to rule-based approaches.
+
+### Error Handling Strategy
+**Choice**: Graceful degradation with fallback mechanisms and detailed error context.
+**Implementation**: Recursion limits, timeouts, and direct query fallbacks when agents fail.
+
+### Deployment Architecture
+**Choice**: Docker Compose with containerized databases and application.
+**Rationale**: Ensures consistent deployment environment, simplifies demo setup, and provides production-ready containerization.
+
+### Flow
+![Alt text](./data/images/arc1.png)
+![Alt text](./data/images/arc2.png)
+
+
+## Security Considerations
+
+- Parameterized queries to prevent SQL injection
+- Connection validation before registration
+- Environment-based configuration management
+- No credential persistence in application state
+
+## Performance Optimizations
+
+- Connection pooling for database efficiency
+- Query result caching with similarity matching
+- Streaming responses for perceived performance
+- Configurable recursion and timeout limits

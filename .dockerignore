@@ -18,7 +18,6 @@ dist/
 downloads/
 eggs/
 request.md
-requirements.txt
 .eggs/
 lib/
 lib64/
