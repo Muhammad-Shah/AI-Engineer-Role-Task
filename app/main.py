@@ -74,9 +74,9 @@ app.add_middleware(
 )
 
 # Static Files
-static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app/static")
 if os.path.exists(static_path):
-    app.mount("/static", StaticFiles(directory=static_path), name="static")
+    app.mount("/app/static", StaticFiles(directory=static_path), name="static")
 
 # Routers
 app.include_router(database_router.router)
@@ -93,7 +93,7 @@ def root():
 @app.get("/ui")
 def ui():
     """Serve the web UI"""
-    static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app/static")
     index_path = os.path.join(static_path, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)

@@ -1,10 +1,10 @@
 services:
   # FastAPI Application - Connects to Local Databases
-  api:
+  db_query_bot:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: chatbot-api
+    container_name: db_query_bot
     ports:
       - "8000:8000"
     environment:

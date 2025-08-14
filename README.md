@@ -1,16 +1,16 @@
-# Database Chatbot Development Task with FastAPI Integration
+# Database Chatbot with FastAPI
 
-This project implements a complete Database Chatbot with FastAPI, supporting secure database connections (PostgreSQL, MySQL, MongoDB), natural-language-to-query translation, streaming responses, chat session management, and a similarity-based caching system.
+A complete Database Chatbot that connects to your local databases (PostgreSQL, MySQL, MongoDB) with natural language to SQL/MongoDB query translation, streaming responses, and an intelligent caching system.
 
 ## Features
-- **Web UI**: Modern, responsive interface at `/ui` for easy testing and demos
-- Database connection management with pooling and timeouts
-- Endpoints per spec: connect/validate/disconnect, chat query (streaming), sessions CRUD
-- LangChain + LangGraph ReAct agent for NL→SQL/Mongo generation and execution
-- Real-time streaming via Server-Sent style JSON lines (newline-delimited JSON)
-- Local SQLite persistence for chat sessions, messages, and cache
-- OpenAPI/Swagger docs at `/docs`
-- Dockerized app and sample PostgreSQL/MongoDB with seed data
+- **🌐 Web UI**: Modern, responsive interface at `/ui` for easy testing and demos
+- **🔌 Smart Connection**: Just use `localhost` - automatically handles Docker networking
+- **🤖 Dual AI Modes**: ReAct Agent (advanced reasoning) + Direct LLM (fast + conversational)
+- **💬 Real-time Streaming**: Server-Sent Events with newline-delimited JSON responses
+- **🗃️ Session Management**: Persistent chat sessions with SQLite storage
+- **⚡ Smart Caching**: Similarity-based caching for faster repeat queries
+- **📚 OpenAPI Docs**: Complete API documentation at `/docs`
+- **🐳 Docker Ready**: Containerized deployment with local database support
 
 ## Project Structure
 ```
@@ -39,61 +39,47 @@ var/
   (created at runtime for local SQLite)
 ```
 
-## Run with Docker (Complete Stack)
+## 🚀 Quick Start
 
-### 🚀 One Command - Everything Included!
-```bash
-docker compose up --build
-```
+### Prerequisites
+1. **Local Databases**: Ensure you have at least one of these running:
+   - PostgreSQL (port 5432)
+   - MySQL (port 3306) 
+   - MongoDB (port 27017)
 
-That's it! This will:
-- 🐘 Start PostgreSQL with sample data
-- 🍃 Start MongoDB with sample data  
-- 🚀 Build and start the API
-- 🌐 Serve the Web UI at **http://localhost:8000/ui**
+2. **OpenAI API Key**: Required for LLM functionality
 
-### Database Connection Details (Docker):
-- **PostgreSQL**: Host: `postgres`, Port: `5432`, User: `postgres`, Password: `postgres`, DB: `sampledb`
-- **MongoDB**: Host: `mongodb`, Port: `27017`, DB: `sampledb` (no authentication)
+### Step 1: Setup Local Databases
 
-### Set OpenAI API Key
-Edit `docker/docker-compose.yml` and uncomment:
+### Step 2: Configure OpenAI API Key
+Create `.env` and copy `.env.exapmle` then set your API key:
 ```yaml
-environment:
-  OPENAI_API_KEY: your_actual_openai_key_here
+OPENAI_API_KEY: your_actual_openai_key_here
 ```
 
-## Alternative: Docker + Local Databases
+### Step 3: Run the Application
+```bash
+# Start the containerized application
+docker-compose -f docker/docker-compose.yml up --build
+```
 
-### Quick Setup
-1. **Setup local databases** with sample data:
-   ```bash
-   python setup_local_databases.py
-   ```
+### Step 4: Access the Application
+- **🌐 Web UI**: http://localhost:8000/ui
+- **📚 API Docs**: http://localhost:8000/docs
 
-2. **Run with Docker** (simplified - no database containers):
-   ```bash
-   python run_docker_local.py
-   ```
+### Step 5: Connect to Your Database
+In the Web UI, simply use:
+- **Host**: `localhost` (works automatically whether running locally or in Docker)
+- **Port**: Your database's standard port (5432, 3306, 27017)
+- **Database**: `sampledb` (if using the setup script)
+- **Credentials**: As configured in your local database
 
-### Manual Docker Setup
-1. Ensure your local databases are running (PostgreSQL, MySQL, MongoDB)
-2. Start the API container:
-   ```bash
-   docker-compose -f docker/docker-compose-local.yml up --build
-   ```
+## 💡 Connection Examples
 
-3. **Important**: In the UI, use `host.docker.internal` as the database host instead of `localhost`
-
-### Database Connection Examples
-
-#### Complete Docker Stack (`docker compose up`)
-When using the complete Docker stack, use container names:
-
-**PostgreSQL:**
+### PostgreSQL
 ```json
 {
-  "host": "postgres",
+  "host": "localhost",
   "port": 5432,
   "database": "sampledb",
   "username": "postgres",
@@ -102,10 +88,22 @@ When using the complete Docker stack, use container names:
 }
 ```
 
-**MongoDB:**
+### MySQL
 ```json
 {
-  "host": "mongodb",
+  "host": "localhost",
+  "port": 3306,
+  "database": "sampledb",
+  "username": "root",
+  "password": "password",
+  "db_type": "mysql"
+}
+```
+
+### MongoDB
+```json
+{
+  "host": "localhost",
   "port": 27017,
   "database": "sampledb",
   "username": "",
@@ -114,36 +112,11 @@ When using the complete Docker stack, use container names:
 }
 ```
 
-#### Local API (uvicorn)
-When running the API locally, use `localhost`:
-```json
-{
-  "host": "localhost",
-  "port": 5432,
-  "database": "sampledb", 
-  "username": "postgres",
-  "password": "your_password",
-  "db_type": "postgresql"
-}
-```
+> **🔧 Smart Networking**: The application automatically detects if it's running in Docker and converts `localhost` to `host.docker.internal` when needed. You always use `localhost` in the UI!
 
-#### Docker API + Local Databases
-When running API in Docker with local databases, use `host.docker.internal`:
-```json
-{
-  "host": "host.docker.internal",
-  "port": 5432,
-  "database": "sampledb",
-  "username": "postgres", 
-  "password": "your_password",
-  "db_type": "postgresql"
-}
-```
+## 🤖 AI Query Modes
 
-## Chat: Create a session
-POST `/api/chat/sessions`
-
-## Chat: Send a natural language query (streamed response)
+The application offers two powerful AI modes for interacting with your databases:
 
 ### ReAct Agent Mode (Advanced)
 POST `/api/chat/query`
@@ -181,21 +154,46 @@ Both endpoints stream responses as newline-delimited JSON events:
 - **Explanations**: Provides context for generated queries
 - **Mixed Mode**: Seamlessly switches between data queries and chat
 
-## Other Endpoints
-- GET `/api/chat/sessions`
-- GET `/api/chat/sessions/{session_id}/messages`
-- DELETE `/api/chat/sessions/{session_id}`
-- GET `/api/database/validate/{connection_id}`
-- DELETE `/api/database/disconnect/{connection_id}`
+## 📝 Example Queries
 
-## Supported Query Types (examples)
+### Database Queries
 - "Show me all users from last month"
-- "How many orders today?" (count)
-- "List orders from the past week"
-- "Show users"
-- "Count users yesterday"
+- "How many orders were placed today?"
+- "List users in the Engineering department"
+- "What are the top 5 products by sales?"
+- "Count active users"
 
-## Notes
-- The NL translation uses a ReAct agent powered by LangChain + LangGraph (requires `OPENAI_API_KEY`).
-- Caching uses Jaccard similarity on token sets with TTL to speed up repeat/similar queries.
-- Sessions, messages, and cache are stored locally in SQLite (`var/app_data.sqlite`).
+### Conversational
+- "Hello, how can you help me?"
+- "What databases can you connect to?"
+- "Explain what you found in the data"
+
+## 🔧 API Endpoints
+
+### Database Management
+- `POST /api/database/connect` - Connect to database
+- `GET /api/database/validate/{connection_id}` - Validate connection
+- `DELETE /api/database/disconnect/{connection_id}` - Disconnect
+
+### Chat Sessions
+- `POST /api/chat/sessions` - Create new session
+- `GET /api/chat/sessions` - List all sessions
+- `GET /api/chat/sessions/{session_id}/messages` - Get session messages
+- `DELETE /api/chat/sessions/{session_id}` - Delete session
+
+### Query Processing
+- `POST /api/chat/query` - ReAct Agent mode (advanced reasoning)
+- `POST /api/chat/query-direct` - Direct LLM mode (fast + conversational)
+
+## 🏗️ Technical Features
+
+- **Smart Caching**: Jaccard similarity-based caching with TTL for faster repeat queries
+- **Session Persistence**: SQLite storage for chat sessions, messages, and cache
+- **Connection Pooling**: Efficient database connection management with timeouts
+- **Streaming Responses**: Real-time Server-Sent Events with newline-delimited JSON
+- **Auto-Detection**: Automatic Docker networking with localhost conversion
+- **LLM Integration**: Powered by LangChain + LangGraph with OpenAI models
+
+---
+
+**🎉 Ready to chat with your databases! Just use `localhost` and let the AI handle the rest.**
