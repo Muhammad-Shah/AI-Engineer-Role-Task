@@ -127,6 +127,14 @@ body {
     color: var(--text-secondary);
 }
 
+.help-text {
+    display: block;
+    margin-top: 0.25rem;
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
 .form-group input,
 .form-group select {
     width: 100%;

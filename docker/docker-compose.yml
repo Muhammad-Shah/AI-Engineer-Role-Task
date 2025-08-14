@@ -1,65 +1,27 @@
 services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: sampledb
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./../data/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
-  mongodb:
-    image: mongo:7
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: root
-      MONGO_INITDB_DATABASE: sampledb
-    ports:
-      - "27017:27017"
-    volumes:
-      - ./../data/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
-    command: ["mongod", "--quiet", "--logpath", "/dev/null"]
-    healthcheck:
-      test: ["CMD-SHELL", "mongosh --username root --password root --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 })' --quiet"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    restart: unless-stopped
-
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: testdb
-      MYSQL_USER: testuser
-      MYSQL_PASSWORD: testpass
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./../data/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
-    restart: unless-stopped
-
+  # FastAPI Application - Connects to Local Databases
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    container_name: chatbot-api
     ports:
       - "8000:8000"
     environment:
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      CORS_ALLOW_ORIGINS: "*"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
+      - .env
+    volumes:
+      - api_data:/app/var
+    extra_hosts:
+      # Allow container to access host machine's databases
+      - "host.docker.internal:host-gateway"
+    networks:
+      - chatbot-network
+    restart: unless-stopped
+
+volumes:
+  api_data:
+    driver: local
+
+networks:
+  chatbot-network:
+    driver: bridge

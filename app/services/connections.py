@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from sqlalchemy import create_engine, text
@@ -13,6 +16,37 @@ try:
     import pymongo
 except Exception:  # pragma: no cover
     pymongo = None  # type: ignore
+
+
+def _is_running_in_docker() -> bool:
+    """Detect if the application is running inside a Docker container."""
+    # Check for common Docker indicators
+    if Path("/.dockerenv").exists():
+        return True
+    
+    # Check cgroup for docker container indicators
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            content = f.read()
+            return "docker" in content or "containerd" in content
+    except (FileNotFoundError, PermissionError):
+        pass
+    
+    # Check hostname patterns (Docker containers often have random hostnames)
+    hostname = os.getenv("HOSTNAME", "")
+    if len(hostname) == 12 and hostname.isalnum():
+        return True
+    
+    return False
+
+
+def _resolve_host(host: str) -> str:
+    """Convert localhost to host.docker.internal when running in Docker."""
+    if host.lower() in ("localhost", "127.0.0.1") and _is_running_in_docker():
+        resolved = "host.docker.internal"
+        logging.info(f"🐳 Docker detected: Converting '{host}' to '{resolved}' for container networking")
+        return resolved
+    return host
 
 
 @dataclass
@@ -31,6 +65,9 @@ class ConnectionRegistry:
         self._store: Dict[str, ConnectionEntry] = {}
 
     def connect(self, host: str, port: int, database: str, username: Optional[str], password: Optional[str], db_type: str = "postgresql", options: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        # Resolve localhost to host.docker.internal when running in Docker
+        resolved_host = _resolve_host(host)
+        
         connection_id = str(uuid.uuid4())
         created_at = time.time()
         options = options or {}
@@ -39,7 +76,7 @@ class ConnectionRegistry:
             if not username or not password:
                 raise ValueError(f"Username and password are required for {db_type}")
             driver = "postgresql+psycopg2" if db_type == "postgresql" else "mysql+pymysql"
-            url = f"{driver}://{username}:{password}@{host}:{port}/{database}"
+            url = f"{driver}://{username}:{password}@{resolved_host}:{port}/{database}"
             pool_size = int(options.get("pool_size", 5))
             max_overflow = int(options.get("max_overflow", 10))
             pool_timeout = int(options.get("pool_timeout", 30))
@@ -90,10 +127,10 @@ class ConnectionRegistry:
             if username and password:
                 # For root user, use admin as authSource; for others use the specified database
                 auth_source = "admin" if username == "root" else database
-                uri = f"mongodb://{username}:{password}@{host}:{port}/{database}?authSource={auth_source}"
+                uri = f"mongodb://{username}:{password}@{resolved_host}:{port}/{database}?authSource={auth_source}"
             else:
                 # No authentication (local development)
-                uri = f"mongodb://{host}:{port}/{database}"
+                uri = f"mongodb://{resolved_host}:{port}/{database}"
             
             server_selection_timeout_ms = int(options.get("serverSelectionTimeoutMS", 5000))
             client = pymongo.MongoClient(uri, serverSelectionTimeoutMS=server_selection_timeout_ms)

@@ -39,20 +39,58 @@ var/
   (created at runtime for local SQLite)
 ```
 
-## Run with Docker
-1. From the project root (`AI Engineer Role Task`), start docker compose:
+## Run with Docker (Complete Stack)
+
+### 🚀 One Command - Everything Included!
+```bash
+docker compose up --build
+```
+
+That's it! This will:
+- 🐘 Start PostgreSQL with sample data
+- 🍃 Start MongoDB with sample data  
+- 🚀 Build and start the API
+- 🌐 Serve the Web UI at **http://localhost:8000/ui**
+
+### Database Connection Details (Docker):
+- **PostgreSQL**: Host: `postgres`, Port: `5432`, User: `postgres`, Password: `postgres`, DB: `sampledb`
+- **MongoDB**: Host: `mongodb`, Port: `27017`, DB: `sampledb` (no authentication)
+
+### Set OpenAI API Key
+Edit `docker/docker-compose.yml` and uncomment:
+```yaml
+environment:
+  OPENAI_API_KEY: your_actual_openai_key_here
+```
+
+## Alternative: Docker + Local Databases
+
+### Quick Setup
+1. **Setup local databases** with sample data:
    ```bash
-   docker compose -f docker/docker-compose.yml up --build
+   python setup_local_databases.py
    ```
-2. The API will be at `http://localhost:8000` and Web UI at `http://localhost:8000/ui`. Postgres is exposed at `localhost:5432`, MongoDB at `localhost:27017` (from the host). Inside the API container, service hosts are `postgres` and `mongodb`.
-3. To enable the LLM agent inside Docker, set environment variables in the `api` service:
-   - `OPENAI_API_KEY`: your OpenAI key
-   - Optional: `OPENAI_MODEL` (default `gpt-4o-mini`)
 
-### Connect to Postgres (Docker)
-When calling the API (which runs in the container), use host `postgres`:
+2. **Run with Docker** (simplified - no database containers):
+   ```bash
+   python run_docker_local.py
+   ```
 
-POST `/api/database/connect`
+### Manual Docker Setup
+1. Ensure your local databases are running (PostgreSQL, MySQL, MongoDB)
+2. Start the API container:
+   ```bash
+   docker-compose -f docker/docker-compose-local.yml up --build
+   ```
+
+3. **Important**: In the UI, use `host.docker.internal` as the database host instead of `localhost`
+
+### Database Connection Examples
+
+#### Complete Docker Stack (`docker compose up`)
+When using the complete Docker stack, use container names:
+
+**PostgreSQL:**
 ```json
 {
   "host": "postgres",
@@ -64,19 +102,41 @@ POST `/api/database/connect`
 }
 ```
 
-If you run the API locally (not in Docker), use `localhost` as host.
-
-### Connect to MongoDB (Docker)
-POST `/api/database/connect`
-```
+**MongoDB:**
+```json
 {
   "host": "mongodb",
   "port": 27017,
   "database": "sampledb",
-  "username": "appuser",
-  "password": "apppassword",
-  "db_type": "mongodb",
-  "options": { "serverSelectionTimeoutMS": 5000 }
+  "username": "",
+  "password": "",
+  "db_type": "mongodb"
+}
+```
+
+#### Local API (uvicorn)
+When running the API locally, use `localhost`:
+```json
+{
+  "host": "localhost",
+  "port": 5432,
+  "database": "sampledb", 
+  "username": "postgres",
+  "password": "your_password",
+  "db_type": "postgresql"
+}
+```
+
+#### Docker API + Local Databases
+When running API in Docker with local databases, use `host.docker.internal`:
+```json
+{
+  "host": "host.docker.internal",
+  "port": 5432,
+  "database": "sampledb",
+  "username": "postgres", 
+  "password": "your_password",
+  "db_type": "postgresql"
 }
 ```
 

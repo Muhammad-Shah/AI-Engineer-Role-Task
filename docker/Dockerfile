@@ -13,9 +13,8 @@ COPY ./app /app/app
 COPY ./data /app/data
 COPY ./docker /app/docker
 COPY ./static /app/static
-COPY ./var /app/var
-COPY ./.env /app/.env
 COPY ./requirements.txt /app/requirements.txt
+COPY ./.env /app/.env
 
 
 # Install dependencies
@@ -24,4 +23,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

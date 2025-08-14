@@ -1,18 +1,8 @@
-// MongoDB initialization script
-// Create database and user
-db = db.getSiblingDB('sampledb');
+// MongoDB initialization script for Docker
+print("Initializing MongoDB with sample data...");
 
-// Create user with read/write access to sampledb
-db.createUser({
-  user: "appuser",
-  pwd: "apppassword",
-  roles: [
-    {
-      role: "readWrite",
-      db: "sampledb"
-    }
-  ]
-});
+// Switch to sampledb database
+db = db.getSiblingDB('sampledb');
 
 // Sample collections and data
 db.users.insertMany([
