@@ -1,4 +1,3 @@
-
 # Database Chatbot with FastAPI
 
 A complete Database Chatbot that connects to your local databases (PostgreSQL, MySQL, MongoDB) with natural language to SQL/MongoDB query translation, streaming responses, and an intelligent caching system.
